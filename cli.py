@@ -6,10 +6,31 @@ import argparse
 import io
 from types import ModuleType
 
-# Add the dummy renpy module to the path
-sys.path.insert(0, '.')
+class RevertableList(list):
+    def __setstate__(self, state):
+        if isinstance(state, list):
+            self.extend(state)
+        elif isinstance(state, dict):
+            self.__dict__.update(state)
+        else:
+            self.state = state
 
-# A generic placeholder for any unknown class
+class RevertableDict(dict):
+    def __setstate__(self, state):
+        if isinstance(state, dict):
+            self.update(state)
+        else:
+            self.state = state
+
+class RevertableSet(set):
+    def __setstate__(self, state):
+        if isinstance(state, set):
+            self.update(state)
+        elif isinstance(state, dict):
+            self.__dict__.update(state)
+        else:
+            self.state = state
+
 class GenericPlaceholder:
     def __init__(self, *args, **kwargs):
         pass
@@ -19,108 +40,102 @@ class GenericPlaceholder:
         else:
             self.state = state
 
-# Import all the dummy modules to register the classes
-import renpy.revertable.object
-import renpy.ast.ast
-import renpy.character.character
-import store.store
-import store._console.console
-import renpy.execution.execution
-import renpy.display.layout.layout
-import renpy.styledata.styleclass.styleclass
-import renpy.rollback.rollback
-import renpy.audio.audio.audio
-import renpy.display.image.image
-
-# A map of all our known dummy classes
-known_classes = {
-    ("renpy.revertable", "RevertableList"): renpy.revertable.object.RevertableList,
-    ("renpy.revertable", "RevertableDict"): renpy.revertable.object.RevertableDict,
-    ("renpy.revertable", "RevertableSet"): renpy.revertable.object.RevertableSet,
-    ("renpy.revertable", "RevertableObject"): renpy.revertable.object.RevertableObject,
-    ("renpy.ast", "PyExpr"): renpy.ast.ast.PyExpr,
-    ("renpy.character", "HistoryEntry"): renpy.character.character.HistoryEntry,
-    ("store", "VoiceInfo"): store.store.VoiceInfo,
-    ("store._console", "TracedExpressionsList"): store._console.console.TracedExpressionsList,
-    ("renpy.execution", "Delete"): renpy.execution.execution.Delete,
-    ("renpy.execution", "Context"): renpy.execution.execution.Context,
-    ("renpy.display.layout", "Null"): renpy.display.layout.layout.Null,
-    ("renpy.styledata.styleclass", "Style"): renpy.styledata.styleclass.styleclass.Style,
-    ("renpy.rollback", "RollbackLog"): renpy.rollback.rollback.RollbackLog,
-    ("renpy.rollback", "Rollback"): renpy.rollback.rollback.Rollback,
-    ("renpy.audio.audio", "MusicContext"): renpy.audio.audio.audio.MusicContext,
-    ("renpy.display.image", "ShownImageInfo"): renpy.display.image.image.ShownImageInfo,
-}
-
 _placeholder_cache = {}
 
-class PlaceholderFactory(type):
-    def __new__(cls, module_name, class_name):
-        key = (module_name, class_name)
-        if key in _placeholder_cache:
-            return _placeholder_cache[key]
+def get_placeholder_class(module_name, class_name):
+    key = (module_name, class_name)
+    if key in _placeholder_cache:
+        return _placeholder_cache[key]
 
-        # Create the new class
-        new_class = type(class_name, (GenericPlaceholder,), {})
-        new_class.__module__ = module_name
+    base_classes = {
+        "RevertableList": RevertableList,
+        "RevertableDict": RevertableDict,
+        "RevertableSet": RevertableSet,
+    }
+    base_class = base_classes.get(class_name, GenericPlaceholder)
+    new_class = type(class_name, (base_class,), {})
+    new_class.__module__ = module_name
 
-        # Inject it into a dynamic module
-        if module_name not in sys.modules:
-            sys.modules[module_name] = ModuleType(module_name)
+    # Create nested modules if they don't exist
+    parts = module_name.split('.')
+    for i in range(1, len(parts) + 1):
+        sub_module_name = '.'.join(parts[:i])
+        if sub_module_name not in sys.modules:
+            new_mod = ModuleType(sub_module_name)
+            sys.modules[sub_module_name] = new_mod
+            if i > 1:
+                parent_module_name = '.'.join(parts[:i-1])
+                parent_module = sys.modules[parent_module_name]
+                setattr(parent_module, parts[i-1], new_mod)
 
-        setattr(sys.modules[module_name], class_name, new_class)
+    final_module = sys.modules[module_name]
+    setattr(final_module, class_name, new_class)
 
-        _placeholder_cache[key] = new_class
-        return new_class
+    _placeholder_cache[key] = new_class
+    return new_class
 
 class CustomUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
-        if (module, name) in known_classes:
-            return known_classes[(module, name)]
-        return PlaceholderFactory(module, name)
+        return get_placeholder_class(module, name)
 
-class CustomJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        cls_module = getattr(o.__class__, '__module__', None)
-        if cls_module and (cls_module.startswith(('renpy', 'store')) or isinstance(o, GenericPlaceholder)):
-            module = o.__class__.__module__
-            name = o.__class__.__name__
+def to_json_friendly(data):
+    cls_module = getattr(data.__class__, '__module__', None)
+    if isinstance(data, GenericPlaceholder) or (cls_module and (cls_module.startswith('renpy') or cls_module.startswith('store'))):
+        state = None
+        if isinstance(data, list):
+            state = [to_json_friendly(x) for x in data]
+        elif isinstance(data, set):
+            state = {'__set__': [to_json_friendly(x) for x in data]}
+        elif isinstance(data, dict):
+            if any(not isinstance(k, (str, int, float, bool, type(None))) for k in data.keys()):
+                state = {'__dict_pairs__': [[to_json_friendly(k), to_json_friendly(v)] for k, v in data.items()]}
+            else:
+                state = {k: to_json_friendly(v) for k, v in data.items()}
+        elif hasattr(data, '__dict__') and data.__dict__:
+            state = to_json_friendly(data.__dict__)
+        elif hasattr(data, 'state'):
+            state = to_json_friendly(data.state)
 
-            state = None
-            if isinstance(o, list):
-                state = list(o)
-            elif isinstance(o, dict):
-                state = dict(o)
-            elif isinstance(o, set):
-                state = {"__set__": list(o)}
-            elif hasattr(o, '__dict__') and o.__dict__:
-                state = o.__dict__
-            elif hasattr(o, 'state'):
-                state = o.state
+        return {
+            "__class__": data.__class__.__name__,
+            "__module__": cls_module,
+            "__state__": state
+        }
 
-            return {
-                "__class__": name,
-                "__module__": module,
-                "__state__": state
-            }
-        return super().default(o)
+    if isinstance(data, (str, int, float, bool, type(None))):
+        return data
+    if isinstance(data, tuple):
+        return {'__tuple__': [to_json_friendly(x) for x in data]}
+    if isinstance(data, list):
+        return [to_json_friendly(x) for x in data]
+    if isinstance(data, set):
+        return {'__set__': [to_json_friendly(x) for x in data]}
+    if isinstance(data, dict):
+        if any(not isinstance(k, (str, int, float, bool, type(None))) for k in data.keys()):
+            return {'__dict_pairs__': [[to_json_friendly(k), to_json_friendly(v)] for k, v in data.items()]}
+        return {k: to_json_friendly(v) for k, v in data.items()}
+
+    return str(data)
 
 def decode(args):
-    save_file_path = args.save_file
-    with zipfile.ZipFile(save_file_path, 'r') as z:
+    with zipfile.ZipFile(args.save_file, 'r') as z:
         with z.open('log') as f:
             unpickler = CustomUnpickler(f)
             data = unpickler.load()
-            print(json.dumps(data, indent=2, cls=CustomJSONEncoder))
+            json_friendly_data = to_json_friendly(data)
+            print(json.dumps(json_friendly_data, indent=2))
 
 def json_object_hook(d):
+    if '__tuple__' in d:
+        return tuple(d['__tuple__'])
+    if '__set__' in d:
+        return set(d['__set__'])
+    if '__dict_pairs__' in d:
+        return dict(d['__dict_pairs__'])
+
     if "__class__" in d and "__module__" in d:
-        module = d["__module__"]
-        name = d["__class__"]
-        cls = known_classes.get((module, name)) or PlaceholderFactory(module, name)
-
+        cls = get_placeholder_class(d["__module__"], d["__class__"])
         instance = cls.__new__(cls)
-
         state = d.get("__state__")
         if state is not None:
             if isinstance(instance, list) and isinstance(state, list):
@@ -137,11 +152,9 @@ def json_object_hook(d):
 def encode(args):
     with open(args.json_file, 'r') as f:
         data = json.load(f, object_hook=json_object_hook)
-
     pickled_log_buffer = io.BytesIO()
     pickle.dump(data, pickled_log_buffer, protocol=2)
     pickled_log_buffer.seek(0)
-
     with zipfile.ZipFile(args.output_file, 'w', zipfile.ZIP_DEFLATED) as new_zip:
         with zipfile.ZipFile(args.save_file, 'r') as original_zip:
             for item in original_zip.infolist():
@@ -153,15 +166,12 @@ def encode(args):
 def main():
     parser = argparse.ArgumentParser(description="A Ren'Py save editor.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
     decode_parser = subparsers.add_parser("decode", help="Decode a Ren'Py save file to lossless JSON.")
     decode_parser.add_argument("save_file", help="The path to the Ren'Py save file.")
-
     encode_parser = subparsers.add_parser("encode", help="Encode a JSON file back into a Ren'Py save file.")
     encode_parser.add_argument("json_file", help="The path to the input JSON file.")
     encode_parser.add_argument("save_file", help="The path to the original Ren'Py save file (to use as a template).")
     encode_parser.add_argument("output_file", help="The path for the new output save file.")
-
     args = parser.parse_args()
 
     if args.command == "decode":
