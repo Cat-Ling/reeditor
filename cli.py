@@ -120,9 +120,25 @@ def to_json_friendly(data):
 def decode(args):
     with zipfile.ZipFile(args.save_file, 'r') as z:
         with z.open('log') as f:
-            unpickler = CustomUnpickler(f)
+            log_bytes = f.read()
+            protocol_version = 2
+            proto_opcode_index = log_bytes.find(b'\x80')
+            if proto_opcode_index != -1 and proto_opcode_index + 1 < len(log_bytes):
+                protocol_version = log_bytes[proto_opcode_index + 1]
+
+            log_stream = io.BytesIO(log_bytes)
+            unpickler = CustomUnpickler(log_stream)
             data = unpickler.load()
             json_friendly_data = to_json_friendly(data)
+
+            if isinstance(json_friendly_data, dict):
+                json_friendly_data['__pickle_version__'] = protocol_version
+            else:
+                json_friendly_data = {
+                    '__data__': json_friendly_data,
+                    '__pickle_version__': protocol_version
+                }
+
             print(json.dumps(json_friendly_data, indent=2))
 
 def json_object_hook(d):
@@ -151,10 +167,15 @@ def json_object_hook(d):
 
 def encode(args):
     with open(args.json_file, 'r') as f:
-        data = json.load(f, object_hook=json_object_hook)
+        json_data = json.load(f, object_hook=json_object_hook)
+
+    protocol_version = json_data.get('__pickle_version__', 2) if isinstance(json_data, dict) else 2
+    data_to_pickle = json_data.get('__data__', json_data) if isinstance(json_data, dict) and '__data__' in json_data else json_data
+
     pickled_log_buffer = io.BytesIO()
-    pickle.dump(data, pickled_log_buffer, protocol=2)
+    pickle.dump(data_to_pickle, pickled_log_buffer, protocol=protocol_version)
     pickled_log_buffer.seek(0)
+
     with zipfile.ZipFile(args.output_file, 'w', zipfile.ZIP_DEFLATED) as new_zip:
         with zipfile.ZipFile(args.save_file, 'r') as original_zip:
             for item in original_zip.infolist():
