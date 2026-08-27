@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ren'Py Universal Save Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Ren'Py Save Editor</h1>
+            <div class="toolbar">
+                <input type="file" id="fileInput" accept=".save" style="display: none;">
+                <button id="btnLoad" class="primary" onclick="document.getElementById('fileInput').click()">Load Save (.save)</button>
+                <button id="btnExport" class="success" disabled>Export Save</button>
+            </div>
+        </header>
+
+        <main>
+            <div id="loading" class="hidden">Processing...</div>
+            <div id="errorBox" class="hidden"></div>
+
+            <div id="editorArea" class="hidden">
+                <div class="meta-panel">
+                    <h3>Save Info</h3>
+                    <div id="metaInfo"></div>
+                </div>
+
+                <div class="tree-controls">
+                    <input type="text" id="searchInput" placeholder="Search keys...">
+                    <button id="btnCollapseAll">Collapse All</button>
+                </div>
+
+                <div id="treeContainer" class="tree-container">
+                    <!-- Dynamic tree gets injected here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
