@@ -1,0 +1,169 @@
+:root {
+    --bg-color: #1e1e1e;
+    --text-color: #d4d4d4;
+    --panel-bg: #252526;
+    --border-color: #3e3e42;
+    --primary: #0e639c;
+    --primary-hover: #1177bb;
+    --success: #2ea043;
+    --success-hover: #3fb950;
+    --error: #f14c4c;
+    --tree-line: #404040;
+    --key-color: #9cdcfe;
+    --string-color: #ce9178;
+    --number-color: #b5cea8;
+    --boolean-color: #569cd6;
+    --null-color: #569cd6;
+    --type-color: #4ec9b0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+h1 { margin: 0; font-size: 1.5rem; }
+
+button {
+    background-color: var(--panel-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+button:hover { background-color: var(--border-color); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button.primary { background-color: var(--primary); border-color: var(--primary); color: white; }
+button.primary:hover:not(:disabled) { background-color: var(--primary-hover); }
+button.success { background-color: var(--success); border-color: var(--success); color: white; }
+button.success:hover:not(:disabled) { background-color: var(--success-hover); }
+
+.hidden { display: none !important; }
+
+#loading {
+    text-align: center;
+    padding: 40px;
+    font-size: 1.2rem;
+    color: var(--primary);
+}
+
+#errorBox {
+    background-color: rgba(241, 76, 76, 0.1);
+    border: 1px solid var(--error);
+    color: var(--error);
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+    font-family: monospace;
+}
+
+.meta-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.meta-panel h3 { margin-top: 0; }
+.meta-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 20px;
+    font-family: monospace;
+}
+.meta-key { color: var(--key-color); }
+
+.tree-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.tree-controls input {
+    flex: 1;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.tree-container {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 10px;
+    overflow-x: auto;
+    min-height: 400px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+}
+
+/* Tree UI */
+.tree-node {
+    margin-left: 20px;
+    border-left: 1px dashed var(--tree-line);
+    padding-left: 10px;
+}
+.tree-node-root { margin-left: 0; border-left: none; padding-left: 0; }
+
+.tree-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 0;
+}
+
+.tree-toggle {
+    cursor: pointer;
+    display: inline-block;
+    width: 15px;
+    text-align: center;
+    user-select: none;
+    color: #888;
+}
+.tree-toggle:hover { color: var(--text-color); }
+
+.tree-key { color: var(--key-color); margin-right: 5px; }
+.tree-type { color: var(--type-color); font-size: 0.9em; margin-right: 5px; cursor: help; }
+
+.tree-value { cursor: text; }
+.tree-value.string { color: var(--string-color); }
+.tree-value.number { color: var(--number-color); }
+.tree-value.boolean { color: var(--boolean-color); }
+.tree-value.null { color: var(--null-color); }
+
+.tree-value-input {
+    background: var(--bg-color);
+    border: 1px solid var(--primary);
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0 2px;
+    min-width: 50px;
+}
